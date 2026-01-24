@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pyc
+*.pytest_cache/
+*.env
+venv/
+ENV/
+env/
+*.egg-info/
+.eggs/
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# PyCharm
+.idea/
+
+# SQLite (if used)
+*.sqlite3
+
+# PostgreSQL data (if accidentally added)
+*.sql
+*.dump
+
+# Logs
+*.log
+
+# Docker
+*.env
+docker-compose.override.yml
+
+# Mac/Linux
+.DS_Store
