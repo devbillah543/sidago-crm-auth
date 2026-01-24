@@ -1,12 +1,16 @@
-from fastapi import APIRouter, Depends, HTTPException
+# app/routes/api.py
+
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 
 from database.db import SessionLocal
+from app.models.user import User
+from app.models.role import Role
+from app.models.token import UserToken
 from app.controllers.auth_controller import login, logout, refresh_tokens
 from app.schemas.auth_schema import LoginRequest
-from app.middlewares.auth_middleware import get_current_user
-from app.models.token import UserToken
+from app.middlewares.auth_middleware import get_current_user, require_role
 
 router = APIRouter()
 
@@ -20,18 +24,19 @@ def get_db():
 
 
 # ---------------- LOGIN ----------------
-@router.post("/login")
+@router.post("/login", summary="Login user")
 def user_login(request: LoginRequest, db: Session = Depends(get_db)):
     """
     Login user with email & password
+    Returns access token, refresh token, and user info
     """
     return login(request.email, request.password, db)
 
 
 # ---------------- LOGOUT ----------------
-@router.post("/logout")
+@router.post("/logout", summary="Logout user")
 def user_logout(
-    user=Depends(get_current_user),  # ✅ Access token is validated here
+    user: User = Depends(get_current_user),  # Access token validated
     db: Session = Depends(get_db)
 ):
     """
@@ -50,19 +55,20 @@ class RefreshRequest(BaseModel):
     refresh_token: str
 
 
-@router.post("/refresh")
+@router.post("/refresh", summary="Refresh access & refresh tokens")
 def refresh(request: RefreshRequest, db: Session = Depends(get_db)):
     """
-    Refresh access & refresh tokens using a valid refresh token
+    Generate new access and refresh tokens using a valid refresh token
+    Returns new tokens and user info
     """
     return refresh_tokens(request.refresh_token, db)
 
 
 # ---------------- GET CURRENT USER ----------------
-@router.get("/me")
-def get_me(user=Depends(get_current_user)):
+@router.get("/me", summary="Get current user info")
+def get_me(user: User = Depends(get_current_user)):
     """
-    Get the current logged-in user's info
+    Get details of the currently logged-in user
     """
     return {
         "id": user.id,
@@ -70,3 +76,31 @@ def get_me(user=Depends(get_current_user)):
         "username": user.username,
         "roles": [r.name for r in user.roles],
     }
+
+
+# ---------------- GET AGENT LIST ----------------
+@router.get("/agents", summary="Get all agents (admin only)")
+def get_agents(
+    admin_user: User = Depends(require_role("admin")),  # Only admin can access
+    db: Session = Depends(get_db)
+):
+    """
+    Returns a list of all users who have the 'agent' role.
+    Accessible only by users with 'admin' role.
+    """
+    agents = (
+        db.query(User)
+        .join(User.roles)
+        .filter(Role.name == "agent")
+        .all()
+    )
+
+    return [
+        {
+            "id": agent.id,
+            "email": agent.email,
+            "username": agent.username,
+            "roles": [role.name for role in agent.roles]
+        }
+        for agent in agents
+    ]
