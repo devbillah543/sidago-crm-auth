@@ -1,15 +1,20 @@
 # app/routes/api.py
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Body, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 
+from app.controllers.contact_type_controller import ContactTypeOptionController
+from app.controllers.lead_type_controller import LeadTypeOptionController
+from app.controllers.timezone_controller import TimezoneController
+from app.controllers.lead_controller import LeadController
 from database.db import SessionLocal
 from app.models.user import User
 from app.models.role import Role
 from app.models.token import UserToken
 from app.controllers.auth_controller import login, logout, refresh_tokens
 from app.schemas.auth_schema import LoginRequest
+from app.schemas.lead_schema import LeadCreateRequest,LeadUpdateRequest
 from app.middlewares.auth_middleware import get_current_user, require_role
 
 router = APIRouter()
@@ -104,3 +109,111 @@ def get_agents(
         }
         for agent in agents
     ]
+
+# ---------------- GET ALL LEAD TYPES ----------------
+@router.get("/lead-types", summary="Get all lead types (admin only)")
+def get_lead_types(
+    admin_user: User = Depends(require_role("admin")),
+    db: Session = Depends(get_db)
+):
+    """
+    Returns all lead type options.
+    """
+    return LeadTypeOptionController.get_all_lead_type_options(db)
+
+# ---------------- GET ALL CONTACT TYPES ----------------
+@router.get("/contact-types", summary="Get all contact types (admin only)")
+def get_contact_types(
+    admin_user: User = Depends(require_role("admin")),
+    db: Session = Depends(get_db)
+):
+    """
+    Returns all contact type options.
+    """
+    return ContactTypeOptionController.get_all_contact_type_options(db)
+
+# ---------------- GET ALL TIMEZONES ----------------
+@router.get("/timezones", summary="Get all timezones (admin only)")
+def get_timezones(
+    admin_user: User = Depends(require_role("admin")),
+    db: Session = Depends(get_db)
+):
+    """
+    Returns all timezone options.
+    """
+    return TimezoneController.get_all_timezones(db)
+
+# ---------------- LEADS ----------------
+@router.post("/lead", summary="Create a new lead (admin only)")
+def create_lead(
+    request: LeadCreateRequest,
+    admin_user: User = Depends(require_role("admin")),  # Only admin can create
+    db: Session = Depends(get_db)
+):
+    """
+    Create a new lead with the provided details.
+    Accessible only by users with 'admin' role.
+    """
+    return LeadController.create_lead_in_db(request, db)
+
+@router.get("/leads", summary="Get all leads (any role)")
+def get_leads(
+    user: User = Depends(get_current_user),  # Any authenticated user
+    db: Session = Depends(get_db)
+):
+    """
+    Fetch all leads from the database and return them as a list of dictionaries.
+    Accessible by any authenticated user.
+    """
+    return LeadController.get_all_leads(db)
+
+# ---------------- GET LEAD BY ID ----------------
+@router.get("/lead/{lead_id}", summary="Get a lead by ID (any role)")
+def get_lead_by_id(
+    lead_id: int,
+    user: User = Depends(get_current_user),  # Any authenticated user
+    db: Session = Depends(get_db)
+):
+    """
+    Fetch a single lead by its ID.
+    Accessible by any authenticated user.
+    """
+    lead = LeadController.get_lead_by_id(lead_id, db)
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    return lead
+
+# ---------------- GET LEAD BY AGENT ID ----------------
+@router.get("/lead/agent/{agent_id}", summary="Get a lead by agent ID (any role)")
+def get_lead_by_agent_id(
+    agent_id: int,
+    user: User = Depends(get_current_user),  # Any authenticated user
+    db: Session = Depends(get_db)
+):
+    """
+    Fetch a single lead by its agent ID.
+    Accessible by any authenticated user.
+    """
+    lead = LeadController.get_leads_for_user(agent_id, db)
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    return lead
+
+
+# ---------------- UPDATE LEAD ----------------
+@router.put("/lead/{lead_id}", summary="Update a lead by ID (any role)")
+def update_lead(
+    lead_id: int,
+    updates: LeadUpdateRequest,  # Use the Pydantic schema
+    user: User = Depends(get_current_user),  # Any authenticated user
+    db: Session = Depends(get_db)
+):
+    """
+    Update an existing lead by ID.
+    Accessible by any authenticated user.
+    Only fields provided in the request will be updated.
+    """
+    lead = LeadController.update_lead(lead_id, updates, db)
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    return lead

@@ -9,6 +9,12 @@ from database.db import Base, engine
 from app.models.user import User
 from app.models.role import Role
 from app.models.token import UserToken
+from app.models.lead_type_option import LeadTypeOption
+from app.models.contact_type_option import ContactTypeOption
+from app.models.timezone import Timezone
+from app.models.company import Company
+from app.models.lead import Lead
+
 
 app = FastAPI(title="Sidago CRM API")
 
