@@ -53,3 +53,4 @@ class Company(Base):
 
     # Relationships
     timezone = relationship("Timezone", lazy="joined")
+    leads = relationship("Lead", back_populates="company", cascade="all, delete-orphan")

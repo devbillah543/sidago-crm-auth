@@ -1,4 +1,3 @@
-# app/controllers/lead_controller.py
 
 from sqlalchemy.orm import Session
 from app.models.lead import Lead

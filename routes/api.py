@@ -4,10 +4,12 @@ from fastapi import APIRouter, Body, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 
+from app.controllers.company_controller import CompanyController
 from app.controllers.contact_type_controller import ContactTypeOptionController
 from app.controllers.lead_type_controller import LeadTypeOptionController
 from app.controllers.timezone_controller import TimezoneController
 from app.controllers.lead_controller import LeadController
+from app.schemas.company_schema import CompanyCreateRequest
 from database.db import SessionLocal
 from app.models.user import User
 from app.models.role import Role
@@ -217,3 +219,59 @@ def update_lead(
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
     return lead
+
+# ---------------- COMPANY ----------------
+@router.get("/companies", summary="Get all companies (admin only)")
+def get_companies(
+    admin_user: User = Depends(require_role("admin")),
+    db: Session = Depends(get_db)
+):
+    """
+    Returns all companies.
+    """
+    return CompanyController.get_all_companies(db)
+
+@router.post("/company", summary="Create a new company (admin only)")
+def create_company(
+    request: CompanyCreateRequest,
+    admin_user: User = Depends(require_role("admin")),  # Only admin can create
+    db: Session = Depends(get_db)
+):
+    """
+    Create a new company with the provided details.
+    Accessible only by users with 'admin' role.
+    """
+    return CompanyController.create_company_in_db(request, db)
+
+# ---------------- UPDATE COMPANY ----------------
+@router.put("/company/{company_id}", summary="Update a company (admin only)")
+def update_company(
+    company_id: int,
+    request: CompanyCreateRequest,
+    admin_user: User = Depends(require_role("admin")),  # Only admin
+    db: Session = Depends(get_db)
+):
+    """
+    Update an existing company by ID.
+    Accessible only by users with 'admin' role.
+    """
+    try:
+        return CompanyController.update_company(company_id, request, db)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    
+# ---------------- DELETE COMPANY ----------------
+@router.delete("/company/{company_id}", summary="Delete a company (admin only)")
+def delete_company(
+    company_id: int,
+    admin_user: User = Depends(require_role("admin")),  # Only admin
+    db: Session = Depends(get_db)
+):
+    """
+    Delete a company by ID.
+    Accessible only by users with 'admin' role.
+    """
+    try:
+        return CompanyController.delete_company(company_id, db)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
