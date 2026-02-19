@@ -256,7 +256,7 @@ def update_company(
     Accessible only by users with 'admin' role.
     """
     try:
-        return CompanyController.update_company(company_id, request, db)
+        return CompanyController.update_company(company_id, request, db, current_user=admin_user)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     
