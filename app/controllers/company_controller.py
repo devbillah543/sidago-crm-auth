@@ -33,6 +33,7 @@ class CompanyController:
                 "city": company.city,
                 "zip": company.zip,
                 "website": company.website,
+                "timezone_id": company.timezone_id,
                 "timezone": company.timezone.label if company.timezone else None,
                 "previous_company_name": company.previous_company_name,
                 "previous_company_symbol": company.previous_company_symbol,
