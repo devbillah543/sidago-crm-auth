@@ -4,11 +4,13 @@ from fastapi import APIRouter, Body, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 
+from app.controllers.company_comment_controller import CompanyCommentController
 from app.controllers.company_controller import CompanyController
 from app.controllers.contact_type_controller import ContactTypeOptionController
 from app.controllers.lead_type_controller import LeadTypeOptionController
 from app.controllers.timezone_controller import TimezoneController
 from app.controllers.lead_controller import LeadController
+from app.schemas.company_comment_schema import CommentRequest
 from app.schemas.company_schema import CompanyCreateRequest
 from database.db import SessionLocal
 from app.models.user import User
@@ -275,3 +277,81 @@ def delete_company(
         return CompanyController.delete_company(company_id, db)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+    
+# ---------------- CREATE COMMENT ----------------
+@router.post("/company/{company_id}/comments", summary="Create comment (authenticated)")
+def create_comment(
+    company_id: int,
+    request: CommentRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    try:
+        return CompanyCommentController.create_comment(
+            company_id,
+            request.message,
+            db,
+            current_user=user
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+# ---------------- GET COMMENTS BY COMPANY ----------------
+@router.get("/company/{company_id}/comments", summary="Get comments by company (authenticated)")
+def get_comments_by_company(
+    company_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    return CompanyCommentController.get_comments_by_company_id(company_id, db)
+
+# ---------------- GET SINGLE COMMENT ----------------
+@router.get("/comments/{comment_id}", summary="Get single comment")
+def get_comment(
+    comment_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    try:
+        return CompanyCommentController.get_comment(comment_id, db)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    
+# ---------------- UPDATE COMMENT ----------------
+@router.put("/comments/{comment_id}", summary="Update comment")
+def update_comment(
+    comment_id: int,
+    request: CommentRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    try:
+        return CompanyCommentController.update_comment(
+            comment_id,
+            request.message,
+            db,
+            current_user=user
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    
+
+# ---------------- DELETE COMMENT ----------------
+@router.delete("/comments/{comment_id}", summary="Delete comment")
+def delete_comment(
+    comment_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    try:
+        return CompanyCommentController.delete_comment(
+            comment_id,
+            db,
+            current_user=user
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))

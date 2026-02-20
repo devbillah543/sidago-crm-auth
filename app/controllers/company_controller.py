@@ -1,4 +1,5 @@
 from datetime import datetime
+from sqlalchemy import desc
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 
@@ -17,7 +18,7 @@ class CompanyController:
     # =========================
     @staticmethod
     def get_all_companies(db: Session):
-        companies = db.query(Company).all()
+        companies = db.query(Company).order_by(desc(Company.id)).all()
 
         result = []
         for company in companies:

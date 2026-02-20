@@ -60,3 +60,9 @@ class Company(Base):
         cascade="all, delete-orphan",
         order_by="CompanyHistory.changed_at.desc()",
     )
+    comments = relationship(
+        "CompanyComment",
+        back_populates="company",
+        cascade="all, delete-orphan",
+        order_by="CompanyComment.created_at.desc()",
+    )
