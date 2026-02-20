@@ -2,6 +2,7 @@ from datetime import datetime
 from sqlalchemy import desc
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
+from fastapi import HTTPException, status
 
 from app.models.company import Company
 from app.models.company_history import CompanyHistory
@@ -13,16 +14,12 @@ class CompanyController:
     # =========================
     # GET ALL COMPANIES
     # =========================
-        # =========================
-    # GET ALL COMPANIES WITH HISTORY TEXT ONLY
-    # =========================
     @staticmethod
     def get_all_companies(db: Session):
         companies = db.query(Company).order_by(desc(Company.id)).all()
 
         result = []
         for company in companies:
-            # Get only the history text as a list
             histories = [h.history for h in company.histories]
 
             result.append({
@@ -43,33 +40,71 @@ class CompanyController:
 
         return result
 
+    # =========================
+    # CREATE COMPANY
+    # =========================
+    @staticmethod
+    def create_company_in_db(request: CompanyCreateRequest, db: Session):
+        # Check if company name already exists
+        existing = db.query(Company).filter(Company.name == request.name).first()
+        if existing:
+            raise HTTPException(status_code=400, detail="Company name already exists")
+
+        # Auto-generate symbol if not provided
+        symbol = request.symbol or request.name[:3].upper()
+
+        new_company = Company(
+            name=request.name,
+            symbol=symbol,
+            country=request.country,
+            city=request.city,
+            state=request.state,
+            zip=request.zip,
+            website=request.website,
+            timezone_id=request.timezone_id,
+        )
+
+        try:
+            db.add(new_company)
+            db.commit()
+            db.refresh(new_company)
+        except IntegrityError:
+            db.rollback()
+            raise HTTPException(status_code=400, detail="Company name must be unique")
+        except Exception as e:
+            db.rollback()
+            raise HTTPException(status_code=500, detail=str(e))
+
+        return {
+            "id": new_company.id,
+            "name": new_company.name,
+            "symbol": new_company.symbol,
+            "country": new_company.country,
+            "state": new_company.state,
+            "city": new_company.city,
+            "zip": new_company.zip,
+            "timezone": new_company.timezone.label if new_company.timezone else None
+        }
 
     # =========================
     # UPDATE COMPANY
     # =========================
     @staticmethod
     def update_company(company_id: int, request: CompanyCreateRequest, db: Session, current_user=None):
-        """
-        current_user: logged-in user object (should have id and username)
-        """
         company = db.query(Company).filter(Company.id == company_id).first()
         if not company:
-            raise ValueError("Company not found")
+            raise HTTPException(status_code=404, detail="Company not found")
 
         # Unique name check
         existing = db.query(Company).filter(Company.name == request.name, Company.id != company_id).first()
         if existing:
-            raise ValueError("Company name already exists")
+            raise HTTPException(status_code=400, detail="Company name already exists")
 
-        # Auto-generate symbol
         symbol = request.symbol or request.name[:3].upper()
-
         now = datetime.utcnow()
         username = current_user.username if current_user else "System"
 
-        # --------------------
-        # Prepare history string
-        # --------------------
+        # Prepare history
         history_parts = []
 
         # Name change
@@ -97,13 +132,10 @@ class CompanyController:
                 setattr(company, field, new_value)
                 history_parts.append(f"{field} {old_value} to {new_value}")
 
-        # Apply name & symbol updates
         company.name = request.name
         company.symbol = symbol
 
-        # --------------------
-        # Save single history entry
-        # --------------------
+        # Save history
         if history_parts:
             now_str = now.strftime("%Y-%m-%d %H:%M:%S")
             history_text = f"{now_str} - Modified by {username} - Company " + ", ".join(history_parts)
@@ -121,7 +153,7 @@ class CompanyController:
             db.refresh(company)
         except Exception as e:
             db.rollback()
-            raise e
+            raise HTTPException(status_code=500, detail=str(e))
 
         return {
             "id": company.id,
@@ -142,17 +174,13 @@ class CompanyController:
     def delete_company(company_id: int, db: Session):
         company = db.query(Company).filter(Company.id == company_id).first()
         if not company:
-            raise ValueError("Company not found")
-
-        # Optional: add a history entry before deletion
-        # history_record = CompanyHistory(
-        #     company_id=company.id,
-        #     history=f"{datetime.utcnow()} - Company deleted",
-        #     changed_at=datetime.utcnow()
-        # )
-        # db.add(history_record)
+            raise HTTPException(status_code=404, detail="Company not found")
 
         db.delete(company)
-        db.commit()
+        try:
+            db.commit()
+        except Exception as e:
+            db.rollback()
+            raise HTTPException(status_code=500, detail=str(e))
 
         return {"message": "Company deleted successfully"}

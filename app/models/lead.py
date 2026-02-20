@@ -59,6 +59,7 @@ class Lead(Base):
     follow_up_date = Column(Date)
     assigned_to = Column(String(150))
     date_become_hot = Column(String(50))
+    others_contacts = Column(Text)
 
     # ======================
     # Classification

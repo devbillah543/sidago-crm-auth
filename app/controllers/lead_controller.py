@@ -1,162 +1,50 @@
-
+# lead_controller.py
 from sqlalchemy.orm import Session
+from fastapi import HTTPException
 from app.models.lead import Lead
-from app.models.company import Company
 from app.schemas.lead_schema import LeadCreateRequest, LeadUpdateRequest
-from datetime import datetime
-from typing import Optional, Dict, Any
+
 
 class LeadController:
 
     @staticmethod
     def create_lead_in_db(request: LeadCreateRequest, db: Session):
         """
-        Create a lead in the database.
-        If the company does not exist, create it first.
+        Create a lead in the database using provided company_id.
         """
 
-        # ------------------ Ensure company exists ------------------
-        company = db.query(Company).filter(Company.name == request.company).first()
-        if not company:
-            company = Company(
-                name=request.company,
-                symbol=request.company[:3].upper() if len(request.company) >= 3 else request.company.upper(),
-                timezone_id=1,
-            )
-            db.add(company)
-            db.commit()
-            db.refresh(company)
-
-        # ------------------ Create lead ------------------
         lead = Lead(
             full_name=request.full_name,
-            user_id=request.agent_id,
+            company_id=request.company_id,
             role=request.role,
             phone=request.phone,
-            email=request.email,
-            follow_up_date=request.follow_up_date,
-            assigned_to=request.assigned_to,
+            email=request.email if request.email else None,
+            others_contacts=request.others_contacts if request.others_contacts else None,
             lead_type_id=request.lead_type_id,
-            contact_type_id=request.contact_type_id,
-            date_become_hot=request.date_become_hot,
-            company_id=company.id
         )
 
         db.add(lead)
         db.commit()
         db.refresh(lead)
 
-        return {
-            "id": lead.id,
-            "full_name": lead.full_name,
-            "company": lead.company.name if lead.company else None,
-            "role": lead.role,
-            "email": lead.email,
-            "assigned_to": lead.assigned_to,
-            "agent": lead.agent.username if lead.agent else None,
-            "follow_up_date": lead.follow_up_date,
-            "lead_type": lead.lead_type.label if lead.lead_type else None,
-            "contact_type": lead.contact_type.label if lead.contact_type else None,
-            "date_become_hot": lead.date_become_hot,
-        }
-
-    @staticmethod
-    def get_all_leads(db: Session):
-        leads = db.query(Lead).all()
-        result = []
-
-        for lead in leads:
-            result.append({
-                "id": lead.id,
-                "full_name": lead.full_name,
-                "company": lead.company.name if lead.company else None,
-                "role": lead.role,
-                "email": lead.email,
-                "assigned_to": lead.assigned_to,
-                "agent": lead.agent.username if lead.agent else None,
-                "follow_up_date": lead.follow_up_date,
-                "lead_type": lead.lead_type.label if lead.lead_type else None,
-                "contact_type": lead.contact_type.label if lead.contact_type else None,
-                "date_become_hot": lead.date_become_hot,
-            })
-
-        return result
-
-    @staticmethod
-    def get_lead_by_id(lead_id: int, db: Session):
-        lead = db.query(Lead).filter(Lead.id == lead_id).first()
-        if not lead:
-            return None
-
-        return {
-            "id": lead.id,
-            "full_name": lead.full_name,
-            "company": lead.company.name if lead.company else None,
-            "role": lead.role,
-            "email": lead.email,
-            "assigned_to": lead.assigned_to,
-            "agent": lead.agent.username if lead.agent else None,
-            "follow_up_date": lead.follow_up_date,
-            "lead_type": lead.lead_type.label if lead.lead_type else None,
-            "contact_type": lead.contact_type.label if lead.contact_type else None,
-            "date_become_hot": lead.date_become_hot,
-        }
-    
-    @staticmethod
-    def get_leads_for_user(user_id: int, db: Session):
-        """
-        Fetch all leads assigned to a specific user.
-        """
-        leads = db.query(Lead).filter(Lead.user_id == user_id).all()
-        result = []
-
-        for lead in leads:
-            result.append({
-                "id": lead.id,
-                "full_name": lead.full_name,
-                "company": lead.company.name if lead.company else None,
-                "role": lead.role,
-                "email": lead.email,
-                "assigned_to": lead.assigned_to,
-                "agent": lead.agent.username if lead.agent else None,
-                "follow_up_date": lead.follow_up_date,
-                "lead_type": lead.lead_type.label if lead.lead_type else None,
-                "contact_type": lead.contact_type.label if lead.contact_type else None,
-                "date_become_hot": lead.date_become_hot,
-            })
-
-        return result
+        return LeadController._serialize_lead(lead)
 
     @staticmethod
     def update_lead(lead_id: int, updates: LeadUpdateRequest, db: Session):
         """
-        Update an existing lead by ID with provided fields, including company
+        Update an existing lead by ID with provided fields, including company_id.
         """
         lead = db.query(Lead).filter(Lead.id == lead_id).first()
         if not lead:
-            return None
+            raise HTTPException(status_code=404, detail="Lead not found")
 
-        # ------------------ Handle company update ------------------
-        if updates.company:
-            company = db.query(Company).filter(Company.name == updates.company).first()
-            if not company:
-                company = Company(
-                    name=updates.company,
-                    symbol=updates.company[:3].upper() if len(updates.company) >= 3 else updates.company.upper(),
-                    timezone_id=1
-                )
-                db.add(company)
-                db.commit()
-                db.refresh(company)
-            lead.company_id = company.id
-
-        # ------------------ Update other allowed fields ------------------
-        allowed_fields = [
-            "full_name", "role", "phone", "email", "follow_up_date",
-            "assigned_to", "lead_type_id", "contact_type_id", "date_become_hot"
+        # Update only fields present in LeadUpdateRequest
+        update_fields = [
+            "full_name", "role", "phone", "email",
+            "others_contacts", "company_id", "lead_type_id"
         ]
 
-        for field in allowed_fields:
+        for field in update_fields:
             value = getattr(updates, field)
             if value is not None:
                 setattr(lead, field, value)
@@ -164,16 +52,57 @@ class LeadController:
         db.commit()
         db.refresh(lead)
 
+        return LeadController._serialize_lead(lead)
+
+    @staticmethod
+    def get_all_leads(db: Session):
+        leads = db.query(Lead).all()
+        return [LeadController._serialize_lead(lead) for lead in leads]
+
+    @staticmethod
+    def get_lead_by_id(lead_id: int, db: Session):
+        lead = db.query(Lead).filter(Lead.id == lead_id).first()
+        if not lead:
+            return None
+        return LeadController._serialize_lead(lead)
+
+    @staticmethod
+    def get_leads_for_user(user_id: int, db: Session):
+        leads = db.query(Lead).filter(Lead.user_id == user_id).all()
+        return [LeadController._serialize_lead(lead) for lead in leads]
+
+    @staticmethod
+    def _serialize_lead(lead: Lead):
+        """
+        Helper method to serialize lead with full company + timezone data,
+        and generate a custom lead_id in the format: COMPANYNAME-FULLNAME
+        """
+        company_data = None
+        company_name_safe = ""
+        if lead.company:
+            company_data = {
+                "id": lead.company.id,
+                "name": lead.company.name,
+                "symbol": lead.company.symbol,
+                "timezone": lead.company.timezone.label if lead.company.timezone else None,
+            }
+            company_name_safe = lead.company.symbol
+
+        full_name_safe = lead.full_name
+
         return {
             "id": lead.id,
+            "lead_id": f"{company_name_safe}-{full_name_safe}",
             "full_name": lead.full_name,
-            "company": lead.company.name if lead.company else None,
             "role": lead.role,
+            "phone": lead.phone,
             "email": lead.email,
-            "assigned_to": lead.assigned_to,
-            "agent": lead.agent.username if lead.agent else None,
-            "follow_up_date": lead.follow_up_date,
-            "lead_type": lead.lead_type.label if lead.lead_type else None,
-            "contact_type": lead.contact_type.label if lead.contact_type else None,
-            "date_become_hot": lead.date_become_hot,
+            "assigned_to": getattr(lead, "assigned_to", None),
+            "agent": lead.agent.username if getattr(lead, "agent", None) else None,
+            "follow_up_date": getattr(lead, "follow_up_date", None),
+            "lead_type": lead.lead_type.label if getattr(lead, "lead_type", None) else None,
+            "contact_type": lead.contact_type.label if getattr(lead, "contact_type", None) else None,
+            "date_become_hot": getattr(lead, "date_become_hot", None),
+            "others_contacts": getattr(lead, "others_contacts", None),
+            "company": company_data
         }
