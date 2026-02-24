@@ -20,7 +20,7 @@ class LeadController:
             phone=request.phone,
             email=request.email if request.email else None,
             others_contacts=request.others_contacts if request.others_contacts else None,
-            lead_type_id=request.lead_type_id,
+            contact_type_id=request.contact_type_id,
         )
 
         db.add(lead)
@@ -41,7 +41,7 @@ class LeadController:
         # Update only fields present in LeadUpdateRequest
         update_fields = [
             "full_name", "role", "phone", "email",
-            "others_contacts", "company_id", "lead_type_id"
+            "others_contacts", "company_id", "contact_type_id"
         ]
 
         for field in update_fields:
